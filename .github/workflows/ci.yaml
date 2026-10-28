@@ -60,4 +60,4 @@ jobs:
           path: |
             tests/browser/test-results/
             tests/browser/playwright-report/
-# Publication is manual; release the verified artifacts from the successful merged commit.
+# Publish manually with publish.yaml, using this successful master run's artifacts.

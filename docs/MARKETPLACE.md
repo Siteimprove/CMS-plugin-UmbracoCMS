@@ -25,8 +25,11 @@ The v13 mapping does not establish compatibility with Umbraco 14–16.
 
 ## Release and consolidation
 
-The checked-in metadata prepares the **1.0.0 GA** listing. CI does not publish
-NuGet packages or update Marketplace. Record the package version and listing URLs
+The checked-in metadata prepares the **1.0.0 GA** listing. Validation CI does not
+publish packages. The manual NuGet publication workflow is documented in
+[release preparation](RELEASING.md). Marketplace imports tagged NuGet packages
+automatically; no separate Marketplace login is needed for discovery.
+Record the package version and listing URLs
 when publication and synchronization have completed.
 
 1. Follow [release preparation](RELEASING.md) to validate the final merged commit
