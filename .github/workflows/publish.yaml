@@ -1,0 +1,70 @@
+name: Publish Umbraco 17 to NuGet
+
+on:
+  workflow_dispatch:
+    inputs:
+      validation_run_id:
+        description: Successful master run of Umbraco 17 validation
+        required: true
+        type: string
+      version:
+        description: Exact package version to publish (for example 1.0.0)
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: publish-umbraco17-nuget
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require master
+        env:
+          SELECTED_REF: ${{ github.ref }}
+        run: test "$SELECTED_REF" = refs/heads/master
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Check validation run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+        run: |
+          [[ "$VALIDATION_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$VALIDATION_RUN_ID" > "$RUNNER_TEMP/validation-run.json"
+          python3 scripts/prepare-nuget-publication.py check-run "$RUNNER_TEMP/validation-run.json" --repository "$GH_REPO" --run-id "$VALIDATION_RUN_ID"
+      - name: Download validated customer bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: Siteimprove-Umbraco17-release
+          path: ${{ runner.temp }}/validated-release
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.validation_run_id }}
+      - name: Verify and prepare original package
+        id: package
+        env:
+          GH_REPO: ${{ github.repository }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+        run: |
+          python3 scripts/prepare-nuget-publication.py prepare "$RUNNER_TEMP/validation-run.json" --repository "$GH_REPO" --run-id "$VALIDATION_RUN_ID" --version "$PACKAGE_VERSION" --artifacts "$RUNNER_TEMP/validated-release" --output "$RUNNER_TEMP/nuget-publication"
+      - name: Push verified package to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_ORG_API_KEY }}
+          PACKAGE_PATH: ${{ steps.package.outputs.package_path }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::NUGET_ORG_API_KEY is unavailable. Check organization secret access for this repository."
+            exit 1
+          fi
+          dotnet nuget push "$PACKAGE_PATH" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
